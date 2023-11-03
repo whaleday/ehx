@@ -134,11 +134,12 @@ try:
             if count < listlen:
                 ActionChains(browser).move_to_element(video_list[count]).click().perform()
                 if icon_list[count].get_attribute("class") == "video":
-                    time.sleep(0.5)
-                    browser.execute_script("document.querySelector('video').play()")
                     time.sleep(1)
-                    browser.execute_script(
-                        "document.querySelector('video').currentTime = document.querySelector('video').duration - 8;")
+                    browser.find_element("id", "playercontainer").click()
+                    while browser.execute_script("return isNaN(document.querySelector('video').duration);"):
+                        time.sleep(0.5)
+                    time.sleep(1)
+                    browser.execute_script("document.querySelector('video').currentTime = document.querySelector('video').duration - 8;")
                     time.sleep(7.5)
                     study_end = browser.find_element("class name", "studyend")
                     while study_end.value_of_css_property("display") != "block":
