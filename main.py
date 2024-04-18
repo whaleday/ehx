@@ -41,6 +41,7 @@ try:
     if not os.path.exists("msedgedriver.exe") or getVersion("msedgedriver.exe") != edge_version:
         url = "https://msedgedriver.azureedge.net/" + edge_version + "/edgedriver_win64.zip"
         tempdir = tempfile.gettempdir()
+        driver_path = tempdir + "/edgedriver_win64.zip"
         window.deiconify()
         label_var = tkinter.StringVar()
         bar_var = tkinter.IntVar()
@@ -56,10 +57,10 @@ try:
         down_bar.grid_forget()
         if os.path.exists("msedgedriver.exe"):
             os.remove("msedgedriver.exe")
-        driver_zip = zipfile.ZipFile(tempdir + "/edgedriver_win64.zip")
+        driver_zip = zipfile.ZipFile(driver_path)
         driver_zip.extract("msedgedriver.exe", ".")
         driver_zip.close()
-        os.remove(tempdir + "/edgedriver_win64.zip")
+        os.remove(driver_path)
     if not os.path.exists("userdata"):
         window.title("提交登录信息")
         ttk.Label(window, text="用户名：", font=default_font).grid(row=0, column=0, padx=(5, 0), pady=(7, 5))
@@ -95,7 +96,6 @@ try:
     browser.implicitly_wait(5)
     browser.find_element("xpath", "//span[@onclick='login()']").click()
     browser.switch_to.frame(browser.find_element("id", "layui-layer-iframe100001"))
-    browser.implicitly_wait(5)
     if os.path.exists("userdata"):
         file = open("userdata", "r")
         data = file.read().split("\n")
@@ -106,7 +106,8 @@ try:
         browser.find_element("id", "account1").send_keys(username.get())
         browser.find_element("id", "pwd").send_keys(password.get())
     browser.switch_to.default_content()
-    while len(browser.find_elements("class name", "loginstyle")) != 0:
+    browser.implicitly_wait(0)
+    while len(browser.find_elements("class name", "loginstyle")):
         time.sleep(0.5)
     browser.get("https://www.ehuixue.cn/index/personal/mystudy")
     while True:
