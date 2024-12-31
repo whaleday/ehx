@@ -2,14 +2,17 @@ import os, sys, time, win32api, winreg, tempfile, tkinter, wget, zipfile
 from tkinter import ttk, messagebox
 from selenium import webdriver
 from selenium.webdriver import ActionChains
+from selenium.common import NoSuchElementException
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.actions.wheel_input import ScrollOrigin
-default_font = ("微软雅黑", 10)
+default_font = ("微软雅黑", 10) #ttk全局字体样式
+base_time = 0.5 #sleep时间，网络不佳时应上调该时间
 edge_flag = False
-def barProgress(current, total, width):
+edge_path = "msedgedriver.exe"
+def barProgress(current, total, width): #进度条更新
     percentage = int(current / total * 100)
     bar_var.set(percentage)
     label_var.set("正在下载webdriver %" + str(percentage))
@@ -23,23 +26,32 @@ def tkClick():
     if username.get() != "" and password.get() != "":
         window.withdraw()
         window.quit()
-def getVersion(file):
-    info = win32api.GetFileVersionInfo(file, os.sep)
-    ms = info["FileVersionMS"]
-    ls = info["FileVersionLS"]
+def getVersion(file): #获取driver版本
+    file_version = win32api.GetFileVersionInfo(file, os.sep)
+    ms = file_version["FileVersionMS"]
+    ls = file_version["FileVersionLS"]
     return f"{win32api.HIWORD(ms)}.{win32api.LOWORD(ms)}.{win32api.HIWORD(ls)}.{win32api.LOWORD(ls)}"
-def tkPosition(root):
+def tkPosition(root): #窗口居中
     X = int((root.winfo_screenwidth() - root.winfo_reqwidth()) / 2)
     Y = int((root.winfo_screenheight() - root.winfo_reqheight()) / 2)
     window.geometry(f"+{X}+{Y}")
+def browserWait():
+    i = 1
+    while i <= 4:
+        try:
+            browser.implicitly_wait(2* i * base_time)
+            break
+        except NoSuchElementException as err:
+            i *= 2
 window = tkinter.Tk()
 window.attributes("-topmost", True)
 window.withdraw()
+del_var = tkinter.BooleanVar()
 try:
-    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Edge\\BLBeacon")
-    edge_version = winreg.QueryValueEx(key, "version")[0]
-    if not os.path.exists("msedgedriver.exe") or getVersion("msedgedriver.exe") != edge_version:
-        url = "https://msedgedriver.azureedge.net/" + edge_version + "/edgedriver_win64.zip"
+    edge_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Edge\\BLBeacon") #从注册表获取edge版本信息
+    edge_version = winreg.QueryValueEx(edge_key, "version")[0]
+    if not os.path.exists(edge_path) or getVersion(edge_path) != edge_version: #下载driver
+        down_url = "https://msedgedriver.azureedge.net/" + edge_version + "/edgedriver_win64.zip"
         tempdir = tempfile.gettempdir()
         driver_path = tempdir + "/edgedriver_win64.zip"
         window.deiconify()
@@ -51,17 +63,17 @@ try:
         down_bar.grid(row=1, column=0, padx=5, pady=(0, 5))
         window.overrideredirect(True)
         tkPosition(window)
-        wget.download(url, tempdir, bar=barProgress)
+        wget.download(down_url, tempdir, bar=barProgress)
         window.withdraw()
         down_label.grid_forget()
         down_bar.grid_forget()
-        if os.path.exists("msedgedriver.exe"):
-            os.remove("msedgedriver.exe")
+        if os.path.exists(edge_path):
+            os.remove(edge_path)
         driver_zip = zipfile.ZipFile(driver_path)
-        driver_zip.extract("msedgedriver.exe", ".")
+        driver_zip.extract(edge_path, ".")
         driver_zip.close()
         os.remove(driver_path)
-    if not os.path.exists("userdata"):
+    if not os.path.exists("userdata"): #登录部分
         window.title("提交登录信息")
         ttk.Label(window, text="用户名：", font=default_font).grid(row=0, column=0, padx=(5, 0), pady=(7, 5))
         ttk.Label(window, text="密码：", font=default_font).grid(row=1, column=0, padx=(5, 0))
@@ -69,13 +81,16 @@ try:
         password = ttk.Entry(window, font=default_font)
         username.grid(row=0, column=1, columnspan=2, pady=(7, 5), ipady=2)
         password.grid(row=1, column=1, columnspan=2, ipady=2)
-        check_var = tkinter.BooleanVar()
-        check_style = ttk.Style()
-        check_style.configure("custom.TCheckbutton", font=default_font)
-        checkbox = ttk.Checkbutton(window, text="保存信息", onvalue=True, offvalue=False, variable=check_var, takefocus=False, style="custom.TCheckbutton")
-        checkbox.grid(row=0, column=3, rowspan=2, padx=(3, 3), pady=(1, 0))
-        button_style = ttk.Style()
-        button_style.configure("custom.TButton", font=default_font)
+        chkbox_style = ttk.Style()
+        chkbox_style.configure("custom.TCheckbutton", font=default_font)
+        info_var = tkinter.BooleanVar()
+        info_chkbox = ttk.Checkbutton(window, text="保存信息", onvalue=True, offvalue=False, variable=info_var, takefocus=False, style="custom.TCheckbutton")
+        info_chkbox.grid(row=0, column=3, padx=(5, 0), pady=(1, 0), sticky="w")
+        del_var.set(True)
+        del_chkbox = ttk.Checkbutton(window, text="保留driver", onvalue=True, offvalue=False, variable=del_var, takefocus=False, style="custom.TCheckbutton")
+        del_chkbox.grid(row=1, column=3, padx=(5, 5), pady=(1, 0), sticky="w")
+        btn_style = ttk.Style()
+        btn_style.configure("custom.TButton", font=default_font)
         btn = ttk.Button(window, text="提交", command=tkClick, width=8, takefocus=False, style="custom.TButton")
         btn.grid(row=2, column=1, padx=(45, 0), pady=(5, 7))
         window.protocol("WM_DELETE_WINDOW", tkClose)
@@ -84,17 +99,17 @@ try:
         window.overrideredirect(False)
         tkPosition(window)
         window.mainloop()
-        if check_var.get():
+        if info_var.get():
             file = open("userdata", "w")
             file.write(f"{username.get()}\n{password.get()}")
             file.close()
-    edge_opt = Options()
-    edge_opt.add_argument("--profile-directory=wdProf")
-    browser = webdriver.Edge(service=Service("msedgedriver.exe"), options=edge_opt)
+    edge_opt = Options() #更改edge的启动配置，防止与当前用户配置冲突
+    edge_opt.add_argument("--profile-directory=driver_tmp_prof")
+    browser = webdriver.Edge(service=Service(edge_path), options=edge_opt)
     edge_flag = True
     browser.get("https://www.ehuixue.cn/")
-    browser.implicitly_wait(5)
-    browser.find_element("xpath", "//span[@onclick='login()']").click()
+    browserWait()
+    browser.find_element("xpath", "//span[@onclick='login()']").click() #自动填写登录信息
     browser.switch_to.frame(browser.find_element("id", "layui-layer-iframe100001"))
     if os.path.exists("userdata"):
         file = open("userdata", "r")
@@ -106,53 +121,53 @@ try:
         browser.find_element("id", "account1").send_keys(username.get())
         browser.find_element("id", "pwd").send_keys(password.get())
     browser.switch_to.default_content()
-    browser.implicitly_wait(0)
+    browserWait()
     while len(browser.find_elements("class name", "loginstyle")):
-        time.sleep(0.5)
-    browser.get("https://www.ehuixue.cn/index/personal/mystudy")
+        time.sleep(base_time)
+    browser.get("https://www.ehuixue.cn/index/personal/mystudy") #选课
     while True:
         while True:
             handles = browser.window_handles
             if len(handles) == 2:
                 browser.switch_to.window(handles[1])
                 break
-            time.sleep(0.5)
+            time.sleep(base_time)
         href = browser.execute_script("return location.href;")
         browser.get("https://www.ehuixue.cn/index/study/inclass.html?cid=" + href.split("cid=")[1])
-        browser.implicitly_wait(5)
-        icon_list = browser.find_elements("xpath", "//span[@class='video']|//span[@class='pdf']")
+        browserWait()
+        icon_list = browser.find_elements("xpath", "//span[@class='video']|//span[@class='pdf']") #根据小图标判断任务类型-视频/文档
         listlen = len(icon_list)
         video_list = [e.find_element("xpath", "../../td/div") for e in icon_list]
-        dot_list = [e.find_element("xpath", "./span[2]") for e in video_list]
+        dot_list = [e.find_element("xpath", "./span[2]") for e in video_list] #小蓝点列表，用于判断课程完成情况
         count = 0
         while count < listlen:
             while count < listlen and dot_list[count].get_attribute("class") == "lr_status1":
                 count += 1
             if count < listlen:
                 ActionChains(browser).move_to_element(video_list[count]).click().perform()
-                if icon_list[count].get_attribute("class") == "video":
-                    time.sleep(1)
+                if icon_list[count].get_attribute("class") == "video": #刷视频部分
+                    time.sleep(2 * base_time)
                     browser.find_element("id", "playercontainer").click()
-                    while browser.execute_script("return isNaN(document.querySelector('video').duration);"):
-                        time.sleep(0.5)
-                    time.sleep(1)
-                    browser.execute_script("document.querySelector('video').currentTime = document.querySelector('video').duration - 8;")
+                    while browser.execute_script("return isNaN(document.querySelector('video').duration);"): #等待视频加载
+                        time.sleep(base_time)
+                    time.sleep(2 * base_time)
+                    browser.execute_script("document.querySelector('video').currentTime = document.querySelector('video').duration - 8;") #**核心代码**
                     time.sleep(7.5)
-                    study_end = browser.find_element("class name", "studyend")
-                    while study_end.value_of_css_property("display") != "block":
-                        time.sleep(0.5)
-                    time.sleep(1)
+                    studyend = browser.find_element("class name", "studyend")
+                    while studyend.value_of_css_property("display") != "block":
+                        time.sleep(base_time)
+                    time.sleep(2 * base_time)
                 else:
                     browser.switch_to.frame(browser.find_element("id", "spdf"))
                     WebDriverWait(browser, 10).until(
-                        expected_conditions.presence_of_element_located(("class name", "canvasWrapper")))
-                    time.sleep(0.5)
-                    pgdown_btn = browser.find_element("class name", "pageDown")
+                        expected_conditions.presence_of_element_located(("class name", "canvasWrapper"))) #等待pdf画布加载
+                    time.sleep(base_time)
+                    pgdown_btn = browser.find_element("class name", "pageDown") #根据翻页键是否可用判断pdf是否完成阅读
                     pdf_viewer = browser.find_element("id", "viewerContainer")
-                    sc_origin = ScrollOrigin.from_element(pdf_viewer)
-                    while pgdown_btn.is_enabled():
-                        ActionChains(browser).scroll_from_origin(sc_origin, 0, 2000).perform()
-                        time.sleep(1)
+                    scr_origin = ScrollOrigin.from_element(pdf_viewer)
+                    while pgdown_btn.is_enabled(): #模拟鼠标滚动翻pdf
+                        ActionChains(browser).scroll_from_origin(scr_origin, 0, 2000).perform()
+                        time.sleep(2 * base_time)
                     browser.switch_to.default_content()
                 count += 1
         msg_ret = tkinter.messagebox.askyesno("提示", "该课程已完成，是否继续其它课程？")
@@ -167,3 +182,5 @@ finally:
     window.destroy()
     if edge_flag:
         browser.quit()
+    if os.path.exists(edge_path) and not del_var.get():
+        os.remove(edge_path)
